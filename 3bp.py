@@ -5,6 +5,8 @@ import matplotlib as mpl
 
 from itertools import product
 
+from tqdm import tqdm
+
 
 def gravity(position1, position2, mass1, mass2, gravityConstant = 6.67430e-11):
     #print(f"Points: {position1}; {position2}. Masses: {mass1}; {mass2}")
@@ -20,11 +22,11 @@ def gravity(position1, position2, mass1, mass2, gravityConstant = 6.67430e-11):
 
 nBodies = 3
 nDimensions = 2
-nIterations = int(1e2)
+nIterations = int(5e2)
 finalIteration = nIterations
 
 collision = False
-collisionTolerance = 1
+collisionTolerance = 5e-1
 
 iteration = 0
 dt = 0.1
@@ -47,6 +49,7 @@ currentVelocities[:, :, 0] = initialVelocities
 
 fig, ax = plt.subplots(nrows=1, ncols=1)
 
+progress_bar = tqdm(total=nIterations, desc='Simulation 3-body problem...')
 while not collision and iteration < nIterations:
     #print(f"Iteration {iteration} of {nIterations}:")
     forces = np.zeros((nBodies, nDimensions))
@@ -67,6 +70,9 @@ while not collision and iteration < nIterations:
     if not collision:
         lastValidPositions = currentPositions[:, :, iteration+1].copy()
     iteration += 1
+    progress_bar.update(1)
+
+progress_bar.close()
 
 
 if collision:
@@ -110,10 +116,10 @@ ani = animation.FuncAnimation(
 #ax.scatter(initialPositions[:, 0], initialPositions[:, 1])
 
 #f = r"/home/kikko/repos/3bodyproblem/animation.mp4"
-#f = r"/home/kikko/repos/3bodyproblem/animation.gif"
+f = r"/home/kikko/repos/3bodyproblem/animation.gif"
 #writervideo = animation.FFMpegWriter(fps=60)
-#writergif = animation.PillowWriter(fps=30)
-#ani.save(f, writer=writergif)
+writergif = animation.PillowWriter(fps=30)
+ani.save(f, writer=writergif)
 
 
 plt.show()
