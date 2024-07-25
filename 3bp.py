@@ -1,15 +1,10 @@
 import numpy as np
 import matplotlib.pyplot as plt 
 import matplotlib.animation as animation
-import matplotlib as mpl
-
-from itertools import product
 
 from tqdm import tqdm
 
-
 def gravity(position1, position2, mass1, mass2, gravityConstant = 6.67430e-11):
-    #print(f"Points: {position1}; {position2}. Masses: {mass1}; {mass2}")
     masses = mass1 * mass2
     r_vec = position2 - position1
     r_mag = np.linalg.norm(r_vec)
@@ -18,11 +13,9 @@ def gravity(position1, position2, mass1, mass2, gravityConstant = 6.67430e-11):
     r_hat = r_vec / r_mag
     return gravityConstant * masses / r_mag ** 2 * r_hat
 
-
-
 nBodies = 3
 nDimensions = 2
-nIterations = int(5e2)
+nIterations = int(8e2)
 finalIteration = nIterations
 
 collision = False
@@ -31,13 +24,13 @@ collisionTolerance = 5e-1
 iteration = 0
 dt = 0.1
 
-lengthUniverse = 50
-massScaling = 100
+lengthUniverse = 40
+massScaling = 150
 velocitySpan = 5
 
 rng = np.random.default_rng()  
 
-initialPositions = rng.random((nBodies, nDimensions)) * lengthUniverse # e.g. of size 3, 2
+initialPositions = rng.random((nBodies, nDimensions)) * lengthUniverse
 currentPositions = np.zeros((nBodies, nDimensions, nIterations+1))
 currentPositions[:, :, 0] = initialPositions
 
@@ -51,7 +44,6 @@ fig, ax = plt.subplots(nrows=1, ncols=1)
 
 progress_bar = tqdm(total=nIterations, desc='Simulation 3-body problem...')
 while not collision and iteration < nIterations:
-    #print(f"Iteration {iteration} of {nIterations}:")
     forces = np.zeros((nBodies, nDimensions))
     for i in range(nBodies):
         for j in range(nBodies): 
@@ -74,53 +66,49 @@ while not collision and iteration < nIterations:
 
 progress_bar.close()
 
-
 if collision:
     for i in range(iteration, nIterations+1):
         currentPositions[:, :, i] = lastValidPositions
+
 def init():
     ax.set_xlim(-lengthUniverse, lengthUniverse)
     ax.set_ylim(-lengthUniverse, lengthUniverse)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    ax.set_title('3-Body Problem Simulation')
 
+    global scatters, lines
+    scatters = [ax.scatter([], [], color=color, s=50) for color in ['b', 'g', 'r', 'y', 'k']]
+    lines = [ax.plot([], [], '-', lw=2, alpha=0.5, color=color)[0] for color in ['b', 'g', 'r', 'y', 'k']]
+    
+    return scatters + lines
 
 def animate(indexFrame):
-    ax.cla()
-    colors = ['b', 'g', 'r', 'y', 'k']
-
-    time_text = ax.text(0.05, 0.9, '', transform=ax.transAxes)
-    time_template = 'time = %.1fs'
-
-    if indexFrame > 0: 
-        # assumes nDimension = 2
+    if indexFrame > 0:
         for i in range(nBodies):
             history_x = currentPositions[i, 0, :indexFrame]
             history_y = currentPositions[i, 1, :indexFrame]
 
-            ax.plot(history_x, history_y, '-', lw=2, alpha=0.5, color=colors[i % len(colors)])
+            lines[i].set_data(history_x, history_y)
+            scatters[i].set_offsets([currentPositions[i, 0, indexFrame-1], currentPositions[i, 1, indexFrame-1]])
 
-            ax.scatter(currentPositions[i, 0, indexFrame-1], 
-                       currentPositions[i, 1, indexFrame-1], color=colors[i % len(colors)], s=50)
         ax.set_xlim(np.min(currentPositions[:, 0, :indexFrame])-5, np.max(currentPositions[:, 0, :indexFrame])+5)
         ax.set_ylim(np.min(currentPositions[:, 1, :indexFrame])-5, np.max(currentPositions[:, 1, :indexFrame])+5)
 
-        time_text.set_text(time_template % (indexFrame * dt))
     if collision and indexFrame >= finalIteration:
         ax.text(collisionPosition[0], collisionPosition[1] + 1, 'Collision!', color='red', fontsize=12, ha='center')
-    #return lines, traces, time_text
 
+    return scatters + lines
 
+print("Creating animation...")
 ani = animation.FuncAnimation(
-    fig, animate, nIterations+1, init_func=init, interval=dt*500, blit=False)
+    fig, animate, nIterations+1, init_func=init, interval=dt*500, blit=True)
 
-#fig, ax = plt.subplots(nrows=1, ncols=1)
-#ax.scatter(initialPositions[:, 0], initialPositions[:, 1])
-
-#f = r"/home/kikko/repos/3bodyproblem/animation.mp4"
 f = r"/home/kikko/repos/3bodyproblem/animation.gif"
-#writervideo = animation.FFMpegWriter(fps=60)
 writergif = animation.PillowWriter(fps=30)
+print("Saving animation...")
 ani.save(f, writer=writergif)
-
+print("Done.")
 
 plt.show()
 
