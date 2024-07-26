@@ -1,74 +1,80 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-
 from functools import partial
-
 from tqdm import tqdm
-
 import json
+
+# ================================================================================
+# Parameter initialization
+# ================================================================================
+
+nBodies = 3
+nDimensions = 2
+nIterations = int(2e2)
+
+collisionTolerance = 5e-1
+outOfReachTolerance = 1
+
+dt = 0.1
+
+lengthUniverse = 40
+massScaling = 250
+velocitySpan = 5
 
 # ================================================================================
 # Function definitions
 # ================================================================================
 
-def gravity(position1, position2, mass1, mass2, gravityConstant=6.67430e-11):
-    masses = mass1 * mass2
-    r_vec = position2 - position1
+def gravity(body1, body2, gravityConstant=1):  # Using G = 1 for simplicity
+    r_vec = body2.position - body1.position
     r_mag = np.linalg.norm(r_vec)
     if r_mag == 0:
-        return np.zeros_like(position1)
+        return np.zeros_like(r_vec)
     r_hat = r_vec / r_mag
-    return gravityConstant * masses / r_mag ** 2 * r_hat
+    force_magnitude = gravityConstant * body1.mass * body2.mass / r_mag ** 2
+    return force_magnitude * r_hat
 
 def saveFinalPosition(iteration, position):
     return iteration, position.copy()
 
-def simulate(nIterations):
+def simulate(nIterations, bodies):
     progress_bar = tqdm(total=nIterations, desc='Simulation 3-body problem...')
 
     collision = False
     outOfReach = False
     iteration = 0
     finalIteration = nIterations
-    finalPosition = np.zeros(currentPositions[0,:,0].shape)
+    finalPosition = np.zeros(2)
     while not (collision or outOfReach) and iteration < nIterations:
-        forces = np.zeros((nBodies, nDimensions))
+        forces = [np.zeros(2) for _ in bodies]
         for i in range(nBodies):
             for j in range(nBodies):
-                # bodies shouldn't impact themselves
                 if i != j:
-                    distance = np.linalg.norm(
-                        currentPositions[i, :, iteration] -
-                        currentPositions[j, :, iteration])
+                    distance = np.linalg.norm(bodies[i].position - bodies[j].position)
                     if distance < collisionTolerance:
                         collision = True
-                        finalIteration, finalPosition = saveFinalPosition(iteration, currentPositions[i, :, iteration])
-
-                    f = gravity(currentPositions[i, :, iteration], currentPositions[j, :, iteration], masses[i],
-                                masses[j], 1)  # natural units
+                        finalIteration, finalPosition = saveFinalPosition(iteration, bodies[i].position)
+                    f = gravity(bodies[i], bodies[j])
                     forces[i] += f
 
-        for i in range(nBodies):
-            currentVelocities[i, :, iteration + 1] = currentVelocities[i, :, iteration] + dt * forces[i] / masses[i]
-            currentPositions[i, :, iteration + 1] = currentPositions[i, :, iteration] + dt * currentVelocities[i, :,
-                                                                                           iteration + 1]
+        for i, body in enumerate(bodies):
+            body.velocity += dt * forces[i] / body.mass
+            body.move(dt)
+            #body.position += dt * body.velocity
             if np.linalg.norm(forces[i]) < outOfReachTolerance:
                 outOfReach = True
-                finalIteration, finalPosition = saveFinalPosition(iteration, currentPositions[i, :, iteration])
+                finalIteration, finalPosition = saveFinalPosition(iteration, body.position)
 
-        if not (collision or outOfReach):
-            lastValidPositions = currentPositions[:, :, iteration + 1].copy()
         iteration += 1
         progress_bar.update(1)
 
     progress_bar.close()
 
     if collision or outOfReach:
-        for i in range(iteration, nIterations + 1):
-            currentPositions[:, :, i] = lastValidPositions
-    return currentPositions, collision, outOfReach, finalIteration, finalPosition
-
+        for body in bodies:
+            body.position = finalPosition
+    return bodies, collision, outOfReach, finalIteration, finalPosition
 
 def init():
     ax.set_xlim(-lengthUniverse, lengthUniverse)
@@ -82,33 +88,40 @@ def init():
 
     return scatters + lines
 
-
-def animate(currentPositions, collision, outOfReach, finalIteration, finalPosition, indexFrame):
+def animate(bodies, collision, outOfReach, finalIteration, finalPosition, indexFrame):
     if indexFrame > 0:
-        for i in range(nBodies):
-            history_x = currentPositions[i, 0, :indexFrame]
-            history_y = currentPositions[i, 1, :indexFrame]
+        for i, body in enumerate(bodies):
+            history_x = [pos[0] for pos in body.history[:indexFrame]]
+            history_y = [pos[1] for pos in body.history[:indexFrame]]
 
             lines[i].set_data(history_x, history_y)
-            scatters[i].set_offsets(
-                [currentPositions[i, 0, indexFrame - 1], currentPositions[i, 1, indexFrame - 1]])
+            if indexFrame <= finalIteration:
+                scatters[i].set_offsets(body.history[indexFrame])
+            else:
+                scatters[i].set_offsets(body.history[-1])
 
-        ax.set_xlim(np.min(currentPositions[:, 0, :indexFrame]) - 5, np.max(currentPositions[:, 0, :indexFrame]) + 5)
-        ax.set_ylim(np.min(currentPositions[:, 1, :indexFrame]) - 5, np.max(currentPositions[:, 1, :indexFrame]) + 5)
 
-    # add text on collision or out of reach
+        histories = np.array([body.history[:indexFrame] for body in bodies])
+
+        ax.set_xlim(np.min(histories[:, :, 0])-5, np.max(histories[:, :, 0])+5)
+        ax.set_ylim(np.min(histories[:, :, 1])-5, np.max(histories[:, :, 1])+5)
+        #ax.set_xlim(np.min([body.history[:indexFrame][0] for body in bodies]) - 5,
+        #            np.max([body.history[:indexFrame][0] for body in bodies]) + 5)
+        #print(f"History[:{indexFrame}]: {body.history[:indexFrame]}")
+        #ax.set_ylim(np.min([body.history[:indexFrame][0] for body in bodies]) - 5,
+        #            np.max([body.history[:indexFrame][0] for body in bodies]) + 5)
+
     if collision and indexFrame >= finalIteration:
         ax.text(finalPosition[0], finalPosition[1] + 1, 'Collision!', color='red', fontsize=12, ha='center')
     if outOfReach and indexFrame >= finalIteration:
         ax.text(0.5, 0.5, 'Simulation stopped: Body left the reach of others', color='red', fontsize=12, ha='center')
 
-    if (collision or outOfReach) and indexFrame < finalIteration: 
+    if (collision or outOfReach) and indexFrame < finalIteration:
         ax.set_title(f'3-Body Problem Simulation at time {indexFrame * dt:.1f} years')
     else:
         ax.set_title(f'3-Body Problem Simulation stopped at time {finalIteration * dt:.1f} years')
 
     return scatters + lines
-
 
 # ================================================================================
 # Body definition
@@ -117,73 +130,53 @@ def animate(currentPositions, collision, outOfReach, finalIteration, finalPositi
 class Body:
     def __init__(self, mass, position, velocity):
         self.mass = mass
-        self.position = position
-        self.velocity = velocity 
+        self.position = np.array(position)
+        self.velocity = np.array(velocity)
+        self.history = [self.position.copy()]
 
     def move(self, time):
         self.position += self.velocity * time
+        self.history.append(self.position.copy())
 
     def __str__(self):
         return f"Body(mass={self.mass}, position={self.position}, velocity={self.velocity})"
 
+
 # ================================================================================
-# Parameter initialization
+# Body initialization, simulation
 # ================================================================================
-
-nBodies = 3
-nDimensions = 2
-nIterations = int(8e2)
-nIterations = int(2e2)
-
-collisionTolerance = 5e-1
-outOfReachTolerance = 1
-
-dt = 0.1
-
-lengthUniverse = 40
-massScaling = 250
-velocitySpan = 5
 
 rng = np.random.default_rng()
 
-initialPositions = rng.random((nBodies, nDimensions)) * lengthUniverse
-currentPositions = np.zeros((nBodies, nDimensions, nIterations + 1))
-currentPositions[:, :, 0] = initialPositions
+# Initialize bodies
+bodies = []
+initialVelocities = [] # velocity history isn't saved, 
+for _ in range(nBodies):
+    mass = rng.random() * massScaling
+    position = rng.random(nDimensions) * lengthUniverse
+    velocity = -velocitySpan + rng.random(nDimensions) * 2 * velocitySpan
+    bodies.append(Body(mass, position, velocity))
+    initialVelocities.append(velocity)
 
-masses = rng.random((nBodies,)) * massScaling
-
-initialVelocities = -velocitySpan + rng.random(initialPositions.shape) * 2 * velocitySpan
-currentVelocities = np.zeros(currentPositions.shape)
-currentVelocities[:, :, 0] = initialVelocities
-
-
-
-fig, ax = plt.subplots(nrows=1, ncols=1)
-cmap = plt.get_cmap('viridis')
-#cmap = plt.get_cmap('tab10')
-colors = [cmap(i) for i in np.linspace(0, 1, nBodies)]
-legends = [ax.scatter([], [], color=colors[i], s=50, label=f'Body {i + 1}, Mass {masses[i]:.2f} solar masses') for i in
-           range(nBodies)]
-ax.legend()
-
-# ================================================================================
-# Simulation
-# ================================================================================
-
-positions, collision, outOfReach, finalIteration, finalPosition = simulate(nIterations)
+positions, collision, outOfReach, finalIteration, finalPosition = simulate(nIterations, bodies)
 
 # ================================================================================
 # Animation
 # ================================================================================
 
+fig, ax = plt.subplots(nrows=1, ncols=1)
+cmap = plt.get_cmap('viridis')
+colors = [cmap(i) for i in np.linspace(0, 1, nBodies)]
+legends = [ax.scatter([], [], color=colors[i], s=50, label=f'Body {i + 1}, Mass {bodies[i].mass:.2f} solar masses') for i in range(nBodies)]
+ax.legend()
+
 # FuncAnimation requires an input function which takes one argument, the frame index
 # do partial function application with all parameters except that one
-anim = partial(animate, positions, collision, outOfReach, finalIteration, finalPosition)
+anim = partial(animate, bodies, collision, outOfReach, finalIteration, finalPosition)
 
 print("Creating animation...")
 ani = animation.FuncAnimation(
     fig, anim, nIterations+1, init_func=init, interval=dt*500, blit=True)
-
 
 # ================================================================================
 # Saving
@@ -195,7 +188,7 @@ print("Saving animation...")
 ani.save(f, writer=writergif)
 print("Done.")
 
-# Prpare data for saving
+# Prepare data for saving
 data = {
     "parameters": {
         "nBodies": nBodies,
@@ -208,12 +201,13 @@ data = {
         "massScaling": massScaling,
         "velocitySpan": velocitySpan
     },
-    "initialPositions": initialPositions.tolist(),
-    "masses": masses.tolist(),
-    "initialVelocities": initialVelocities.tolist()
+    "initialPositions": [body.position.tolist() for body in bodies],
+    "masses": [body.mass for body in bodies],
+    "initialVelocities": [velocity.tolist() for velocity in initialVelocities]
 }
 
 with open('simulation_parameters.json', 'w') as file:
     json.dump(data, file, indent=4)
 
 print("Parameters saved")
+
