@@ -19,8 +19,14 @@ outOfReachTolerance = 1
 dt = 0.1
 
 lengthUniverse = 40
-massScaling = 250
-velocitySpan = 5
+
+# New parameters for min and max values
+density_min = 15   # solar mass/km^2
+density_max = 20  # solar mass/km^2
+radius_min = 1     # km
+radius_max = 2     # km
+velocity_min = -1 # AU/year
+velocity_max = 1  # AU/year
 
 # ================================================================================
 # Function definitions
@@ -34,6 +40,10 @@ def gravity(body1, body2, gravityConstant=1):  # Using G = 1 for simplicity
     r_hat = r_vec / r_mag
     force_magnitude = gravityConstant * body1.mass * body2.mass / r_mag ** 2
     return force_magnitude * r_hat
+
+def calculateMass(radius, density):
+    # TODO: generalize to more dimensions
+    return np.pi * radius**2 * density
 
 def saveFinalPosition(iteration, position):
     return iteration, position.copy()
@@ -105,11 +115,6 @@ def animate(bodies, collision, outOfReach, finalIteration, finalPosition, indexF
 
         ax.set_xlim(np.min(histories[:, :, 0])-5, np.max(histories[:, :, 0])+5)
         ax.set_ylim(np.min(histories[:, :, 1])-5, np.max(histories[:, :, 1])+5)
-        #ax.set_xlim(np.min([body.history[:indexFrame][0] for body in bodies]) - 5,
-        #            np.max([body.history[:indexFrame][0] for body in bodies]) + 5)
-        #print(f"History[:{indexFrame}]: {body.history[:indexFrame]}")
-        #ax.set_ylim(np.min([body.history[:indexFrame][0] for body in bodies]) - 5,
-        #            np.max([body.history[:indexFrame][0] for body in bodies]) + 5)
 
     if collision and indexFrame >= finalIteration:
         ax.text(finalPosition[0], finalPosition[1] + 1, 'Collision!', color='red', fontsize=12, ha='center')
@@ -128,8 +133,10 @@ def animate(bodies, collision, outOfReach, finalIteration, finalPosition, indexF
 # ================================================================================
 
 class Body:
-    def __init__(self, mass, position, velocity):
-        self.mass = mass
+    def __init__(self, radius, density, position, velocity):
+        self.radius = radius # 
+        self.density = density # in solar mass/km^2
+        self.mass = calculateMass(radius, density)
         self.position = np.array(position)
         self.velocity = np.array(velocity)
         self.history = [self.position.copy()]
@@ -139,7 +146,7 @@ class Body:
         self.history.append(self.position.copy())
 
     def __str__(self):
-        return f"Body(mass={self.mass}, position={self.position}, velocity={self.velocity})"
+        return f"Body(radius={self.radius}, mass={self.mass}, position={self.position}, velocity={self.velocity})"
 
 
 # ================================================================================
@@ -152,10 +159,11 @@ rng = np.random.default_rng()
 bodies = []
 initialVelocities = [] # velocity history isn't saved, 
 for _ in range(nBodies):
-    mass = rng.random() * massScaling
-    position = rng.random(nDimensions) * lengthUniverse
-    velocity = -velocitySpan + rng.random(nDimensions) * 2 * velocitySpan
-    bodies.append(Body(mass, position, velocity))
+    density = rng.uniform(density_min, density_max)
+    radius = rng.uniform(radius_min, radius_max)
+    position = rng.uniform(0, lengthUniverse, nDimensions)
+    velocity = rng.uniform(velocity_min, velocity_max, nDimensions)
+    bodies.append(Body(radius, density, position, velocity))
     initialVelocities.append(velocity)
 
 positions, collision, outOfReach, finalIteration, finalPosition = simulate(nIterations, bodies)
@@ -198,11 +206,17 @@ data = {
         "outOfReachTolerance": outOfReachTolerance,
         "dt": dt,
         "lengthUniverse": lengthUniverse,
-        "massScaling": massScaling,
-        "velocitySpan": velocitySpan
+        "density_min": density_min,
+        "density_max": density_max,
+        "radius_min": radius_min,
+        "radius_max": radius_max,
+        "velocity_min": velocity_min,
+        "velocity_max": velocity_max
     },
     "initialPositions": [body.position.tolist() for body in bodies],
     "masses": [body.mass for body in bodies],
+    "radii": [body.radius for body in bodies],
+    "densities": [body.density for body in bodies],
     "initialVelocities": [velocity.tolist() for velocity in initialVelocities]
 }
 
