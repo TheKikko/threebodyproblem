@@ -163,3 +163,4 @@ cython_debug/
 # Output 
 *.gif
 *.mp4
+*.json
