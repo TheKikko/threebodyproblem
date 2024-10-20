@@ -12,21 +12,22 @@ import json
 nBodies = 3
 nDimensions = 2
 nIterations = int(2e2)
+nIterations = int(5e2)
 
 collisionTolerance = 5e-1
 outOfReachTolerance = 1
 
 dt = 0.1
 
-lengthUniverse = 40
+lengthUniverse = 20
 
 # New parameters for min and max values
-density_min = 15   # solar mass/km^2
-density_max = 20  # solar mass/km^2
-radius_min = 1     # km
-radius_max = 2     # km
-velocity_min = -1 # AU/year
-velocity_max = 1  # AU/year
+density_min = 0.01  # solar mass/km^2
+density_max = 0.05  # solar mass/km^2
+radius_min = 3      # km
+radius_max = 20     # km
+velocity_min = -1   # AU/year
+velocity_max = 1    # AU/year
 
 # ================================================================================
 # Function definitions
@@ -194,8 +195,9 @@ f = r"/home/kikko/repos/3bodyproblem/animation.gif"
 writergif = animation.PillowWriter(fps=30)
 print("Saving animation...")
 ani.save(f, writer=writergif)
-print("Done.")
+print("Animation saved.")
 
+print("Saving parameters...")
 # Prepare data for saving
 data = {
     "parameters": {
